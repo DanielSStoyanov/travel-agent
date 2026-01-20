@@ -39,7 +39,7 @@ export default function AIInsightsPanel({ insights, summary }) {
       )}
 
       {/* Warnings */}
-      {insights.warnings && insights.warnings.length > 0 && (
+      {Array.isArray(insights.warnings) && insights.warnings.length > 0 && (
         <div className="card border-yellow-200 bg-yellow-50">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="w-4 h-4 text-yellow-600" />

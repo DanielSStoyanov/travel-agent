@@ -1,6 +1,27 @@
 import { useState } from 'react';
 import { Award, ChevronRight, Plane, Hotel, Calendar, TrendingDown, Sparkles } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
+
+// Safe date formatter that handles various formats from different APIs
+function safeFormatDate(dateStr, formatStr = 'MMM d') {
+  if (!dateStr) return '';
+  try {
+    // Try parsing as ISO first
+    const isoDate = parseISO(dateStr);
+    if (isValid(isoDate)) {
+      return format(isoDate, formatStr);
+    }
+    // Try as regular Date
+    const date = new Date(dateStr);
+    if (isValid(date)) {
+      return format(date, formatStr);
+    }
+    // Return original string if not parseable (e.g., "10:30 AM")
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+}
 
 export default function ResultsPanel({ recommendations }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -59,7 +80,7 @@ export default function ResultsPanel({ recommendations }) {
                       : 'bg-gray-50 text-gray-600'
                   }`}
                 >
-                  <div className="text-xs opacity-75">{format(parseISO(date), 'MMM d')}</div>
+                  <div className="text-xs opacity-75">{safeFormatDate(date, 'MMM d')}</div>
                   <div className="font-semibold">${price.toFixed(0)}</div>
                   {isLowest && <div className="text-xs text-green-600">Best</div>}
                 </div>
@@ -108,9 +129,9 @@ export default function ResultsPanel({ recommendations }) {
                   <div className="flex items-center gap-2 text-sm text-primary-600 mb-2">
                     <Calendar className="w-3 h-3" />
                     <span>
-                      {format(parseISO(rec.suggestedDates.departureDate), 'MMM d')}
+                      {safeFormatDate(rec.suggestedDates.departureDate, 'MMM d')}
                       {rec.suggestedDates.returnDate && (
-                        <> - {format(parseISO(rec.suggestedDates.returnDate), 'MMM d')}</>
+                        <> - {safeFormatDate(rec.suggestedDates.returnDate, 'MMM d')}</>
                       )}
                     </span>
                   </div>
@@ -122,8 +143,8 @@ export default function ResultsPanel({ recommendations }) {
                     <div className="flex items-center gap-2 text-gray-600">
                       <Plane className="w-4 h-4 text-gray-400" />
                       <span>
-                        {rec.flight.validatingCarrier} •
-                        {rec.flight.outbound?.stops === 0 ? ' Direct' : ` ${rec.flight.outbound?.stops} stop(s)`}
+                        {rec.flight.validatingCarrier || rec.flight.outbound?.segments?.[0]?.carrier || 'Flight'} •
+                        {rec.flight.outbound?.stops === 0 ? ' Direct' : ` ${rec.flight.outbound?.stops || 0} stop(s)`}
                       </span>
                     </div>
                   )}
@@ -189,17 +210,17 @@ export default function ResultsPanel({ recommendations }) {
                         {rec.flight.outbound?.departure?.time && (
                           <p>
                             <span className="text-gray-500">Outbound:</span>{' '}
-                            {format(parseISO(rec.flight.outbound.departure.time), 'MMM d, HH:mm')}
+                            {safeFormatDate(rec.flight.outbound.departure.time, 'MMM d, HH:mm')}
                           </p>
                         )}
                         <p>
                           <span className="text-gray-500">Route:</span>{' '}
                           {rec.flight.outbound?.departure?.airport} → {rec.flight.outbound?.arrival?.airport}
                         </p>
-                        {rec.flight.outbound?.duration && (
+                        {(rec.flight.outbound?.durationFormatted || rec.flight.outbound?.duration) && (
                           <p>
                             <span className="text-gray-500">Duration:</span>{' '}
-                            {rec.flight.outbound.duration}
+                            {rec.flight.outbound.durationFormatted || rec.flight.outbound.duration}
                           </p>
                         )}
                         <p>
