@@ -1,5 +1,25 @@
 import { Sparkles, TrendingUp, Clock, AlertTriangle, Lightbulb } from 'lucide-react';
 
+// Helper to safely render values that might be objects or strings
+function safeRender(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'object') {
+    // Handle {min, max} price range objects
+    if (value.min !== undefined && value.max !== undefined) {
+      return `$${value.min} - $${value.max}`;
+    }
+    // Try to stringify other objects
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
 export default function AIInsightsPanel({ insights, summary }) {
   if (!insights) return null;
 
@@ -11,7 +31,7 @@ export default function AIInsightsPanel({ insights, summary }) {
           <Sparkles className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
           <div>
             <h3 className="font-semibold text-gray-900 mb-2">AI Summary</h3>
-            <p className="text-sm text-gray-700">{summary}</p>
+            <p className="text-sm text-gray-700">{safeRender(summary)}</p>
           </div>
         </div>
       </div>
@@ -23,7 +43,7 @@ export default function AIInsightsPanel({ insights, summary }) {
             <TrendingUp className="w-4 h-4 text-green-600" />
             <h4 className="font-medium text-gray-900">Price Analysis</h4>
           </div>
-          <p className="text-sm text-gray-600">{insights.priceAnalysis}</p>
+          <p className="text-sm text-gray-600">{safeRender(insights.priceAnalysis)}</p>
         </div>
       )}
 
@@ -34,7 +54,7 @@ export default function AIInsightsPanel({ insights, summary }) {
             <Clock className="w-4 h-4 text-blue-600" />
             <h4 className="font-medium text-gray-900">Timing Advice</h4>
           </div>
-          <p className="text-sm text-gray-600">{insights.timingAdvice}</p>
+          <p className="text-sm text-gray-600">{safeRender(insights.timingAdvice)}</p>
         </div>
       )}
 
@@ -47,7 +67,7 @@ export default function AIInsightsPanel({ insights, summary }) {
           </div>
           <ul className="text-sm text-yellow-700 space-y-1">
             {insights.warnings.map((warning, i) => (
-              <li key={i}>{warning}</li>
+              <li key={i}>{safeRender(warning)}</li>
             ))}
           </ul>
         </div>
@@ -60,7 +80,7 @@ export default function AIInsightsPanel({ insights, summary }) {
             <Lightbulb className="w-4 h-4 text-purple-600" />
             <h4 className="font-medium text-gray-900">Worth Considering</h4>
           </div>
-          <p className="text-sm text-gray-600">{insights.alternativeSuggestions}</p>
+          <p className="text-sm text-gray-600">{safeRender(insights.alternativeSuggestions)}</p>
         </div>
       )}
     </div>
