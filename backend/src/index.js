@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import routes from './routes/index.js';
 import { initializeDatabase } from './db/init.js';
+import { initializeCache } from './services/cache.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,8 +19,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Initialize database
+// Initialize database and cache
 initializeDatabase();
+initializeCache();
 
 // Routes
 app.use('/api', routes);

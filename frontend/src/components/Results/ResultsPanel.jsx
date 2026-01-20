@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Award, ChevronRight, Plane, Hotel } from 'lucide-react';
+import { Award, ChevronRight, Plane, Hotel, Calendar, TrendingDown, Sparkles } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 export default function ResultsPanel({ recommendations }) {
@@ -13,8 +13,62 @@ export default function ResultsPanel({ recommendations }) {
     );
   }
 
+  const { bestDeal, priceByDate, searchPeriod, meta } = recommendations;
+
   return (
     <div className="space-y-4">
+      {/* Best Deal Banner */}
+      {bestDeal && (
+        <div className="card bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+              <TrendingDown className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-green-800 mb-1">Best Deal Found!</h3>
+              <p className="text-sm text-green-700">
+                Cheapest flight on <strong>{bestDeal.date}</strong> at{' '}
+                <strong>{bestDeal.price?.currency} {bestDeal.price?.total?.toFixed(0)}</strong>
+              </p>
+              {searchPeriod && (
+                <p className="text-xs text-green-600 mt-1">
+                  Searched {searchPeriod.tripDuration}-day trips from {searchPeriod.start} to {searchPeriod.end}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Price by Date Chart (simplified) */}
+      {priceByDate && Object.keys(priceByDate).length > 1 && (
+        <div className="card">
+          <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            Price Comparison by Date
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(priceByDate).map(([date, price]) => {
+              const isLowest = price === Math.min(...Object.values(priceByDate));
+              return (
+                <div
+                  key={date}
+                  className={`px-3 py-2 rounded-lg text-sm ${
+                    isLowest
+                      ? 'bg-green-100 text-green-800 border border-green-300'
+                      : 'bg-gray-50 text-gray-600'
+                  }`}
+                >
+                  <div className="text-xs opacity-75">{format(parseISO(date), 'MMM d')}</div>
+                  <div className="font-semibold">${price.toFixed(0)}</div>
+                  {isLowest && <div className="text-xs text-green-600">Best</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Recommendation Cards */}
       <div className="space-y-3">
         {recommendations.recommendations.map((rec, idx) => (
@@ -49,6 +103,19 @@ export default function ResultsPanel({ recommendations }) {
                   </div>
                 </div>
 
+                {/* Suggested Dates */}
+                {rec.suggestedDates?.departureDate && (
+                  <div className="flex items-center gap-2 text-sm text-primary-600 mb-2">
+                    <Calendar className="w-3 h-3" />
+                    <span>
+                      {format(parseISO(rec.suggestedDates.departureDate), 'MMM d')}
+                      {rec.suggestedDates.returnDate && (
+                        <> - {format(parseISO(rec.suggestedDates.returnDate), 'MMM d')}</>
+                      )}
+                    </span>
+                  </div>
+                )}
+
                 <div className="grid sm:grid-cols-2 gap-3 text-sm">
                   {/* Flight Info */}
                   {rec.flight && (
@@ -56,7 +123,7 @@ export default function ResultsPanel({ recommendations }) {
                       <Plane className="w-4 h-4 text-gray-400" />
                       <span>
                         {rec.flight.validatingCarrier} •
-                        {rec.flight.outbound.stops === 0 ? ' Direct' : ` ${rec.flight.outbound.stops} stop(s)`}
+                        {rec.flight.outbound?.stops === 0 ? ' Direct' : ` ${rec.flight.outbound?.stops} stop(s)`}
                       </span>
                     </div>
                   )}
@@ -77,7 +144,21 @@ export default function ResultsPanel({ recommendations }) {
                   )}
                 </div>
 
-                {/* Pros/Cons Preview */}
+                {/* Value Score */}
+                {rec.valueScore && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Sparkles className="w-3 h-3 text-purple-500" />
+                    <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className="bg-purple-500 h-1.5 rounded-full"
+                        style={{ width: `${rec.valueScore}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-purple-600">{rec.valueScore}/100</span>
+                  </div>
+                )}
+
+                {/* Pros Preview */}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {rec.pros?.slice(0, 2).map((pro, i) => (
                     <span key={i} className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full">
@@ -105,17 +186,25 @@ export default function ResultsPanel({ recommendations }) {
                         <Plane className="w-4 h-4" /> Flight Details
                       </h4>
                       <div className="text-sm space-y-1">
+                        {rec.flight.outbound?.departure?.time && (
+                          <p>
+                            <span className="text-gray-500">Outbound:</span>{' '}
+                            {format(parseISO(rec.flight.outbound.departure.time), 'MMM d, HH:mm')}
+                          </p>
+                        )}
                         <p>
-                          <span className="text-gray-500">Outbound:</span>{' '}
-                          {format(parseISO(rec.flight.outbound.departure.time), 'MMM d, HH:mm')}
+                          <span className="text-gray-500">Route:</span>{' '}
+                          {rec.flight.outbound?.departure?.airport} → {rec.flight.outbound?.arrival?.airport}
                         </p>
-                        <p>
-                          <span className="text-gray-500">Duration:</span>{' '}
-                          {rec.flight.outbound.duration}
-                        </p>
+                        {rec.flight.outbound?.duration && (
+                          <p>
+                            <span className="text-gray-500">Duration:</span>{' '}
+                            {rec.flight.outbound.duration}
+                          </p>
+                        )}
                         <p>
                           <span className="text-gray-500">Price:</span>{' '}
-                          ${rec.flight.price.total.toFixed(2)}
+                          {rec.flight.price?.currency} {rec.flight.price?.total?.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -135,8 +224,13 @@ export default function ResultsPanel({ recommendations }) {
                         </p>
                         <p>
                           <span className="text-gray-500">Price:</span>{' '}
-                          ${rec.hotel.offers[0].price.total.toFixed(2)} total
+                          {rec.hotel.offers[0].price?.currency} {rec.hotel.offers[0].price?.total?.toFixed(2)} total
                         </p>
+                        {rec.hotel.offers[0].price?.perNight && (
+                          <p className="text-gray-500 text-xs">
+                            ({rec.hotel.offers[0].price.perNight.toFixed(2)}/night)
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -148,7 +242,9 @@ export default function ResultsPanel({ recommendations }) {
                     <h4 className="font-medium text-green-700 mb-2">Advantages</h4>
                     <ul className="text-sm space-y-1">
                       {rec.pros?.map((pro, i) => (
-                        <li key={i} className="text-gray-600">{pro}</li>
+                        <li key={i} className="text-gray-600 flex items-start gap-1">
+                          <span className="text-green-500">+</span> {pro}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -156,7 +252,9 @@ export default function ResultsPanel({ recommendations }) {
                     <h4 className="font-medium text-red-700 mb-2">Considerations</h4>
                     <ul className="text-sm space-y-1">
                       {rec.cons?.map((con, i) => (
-                        <li key={i} className="text-gray-600">{con}</li>
+                        <li key={i} className="text-gray-600 flex items-start gap-1">
+                          <span className="text-red-500">-</span> {con}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -169,8 +267,9 @@ export default function ResultsPanel({ recommendations }) {
 
       {/* Meta Info */}
       <div className="text-xs text-gray-400 text-center">
-        Analyzed {recommendations.meta?.flightsAnalyzed} flights and {recommendations.meta?.hotelsAnalyzed} hotels
-        {recommendations.meta?.webSearchesUsed > 0 && ` • Enhanced with ${recommendations.meta.webSearchesUsed} web searches`}
+        Analyzed {meta?.flightsAnalyzed || 0} flights and {meta?.hotelsAnalyzed || 0} hotels
+        {meta?.webSearchesUsed > 0 && ` • Enhanced with ${meta.webSearchesUsed} web searches`}
+        {meta?.searchMode === 'date_range' && ' • Date range search'}
       </div>
     </div>
   );
