@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Calendar, Users, Wallet, ArrowRight } from 'lucide-react';
+import { Search, Calendar, Users, Wallet, ArrowRight, Clock, Sparkles } from 'lucide-react';
 import LocationInput from './LocationInput';
 import { travelApi } from '../../services/api';
 
@@ -9,8 +9,9 @@ export default function SearchForm({ onSearch, onResults, setIsLoading }) {
     originCode: '',
     destination: '',
     destinationCode: '',
-    departureDate: '',
-    returnDate: '',
+    periodStart: '',
+    periodEnd: '',
+    tripDuration: 7,
     adults: 1,
     budget: '',
     priorities: [],
@@ -19,12 +20,28 @@ export default function SearchForm({ onSearch, onResults, setIsLoading }) {
 
   const [error, setError] = useState(null);
 
+  // Generate default period (next month)
+  const getDefaultPeriod = () => {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const endOfNextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+    return {
+      start: nextMonth.toISOString().split('T')[0],
+      end: endOfNextMonth.toISOString().split('T')[0]
+    };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
 
-    if (!formData.originCode || !formData.destinationCode || !formData.departureDate) {
-      setError('Please fill in origin, destination, and departure date');
+    if (!formData.originCode || !formData.destinationCode) {
+      setError('Please select origin and destination');
+      return;
+    }
+
+    if (!formData.periodStart || !formData.periodEnd) {
+      setError('Please select a search period (date range)');
       return;
     }
 
@@ -35,8 +52,9 @@ export default function SearchForm({ onSearch, onResults, setIsLoading }) {
       const results = await travelApi.getRecommendations({
         origin: formData.originCode,
         destination: formData.destinationCode,
-        departureDate: formData.departureDate,
-        returnDate: formData.returnDate || undefined,
+        periodStart: formData.periodStart,
+        periodEnd: formData.periodEnd,
+        tripDuration: formData.tripDuration,
         adults: formData.adults,
         budget: formData.budget || undefined,
         priorities: formData.priorities,
@@ -60,9 +78,32 @@ export default function SearchForm({ onSearch, onResults, setIsLoading }) {
     { id: 'location', label: 'Central Location' },
   ];
 
+  const tripDurations = [
+    { value: 3, label: 'Weekend (3 days)' },
+    { value: 5, label: 'Short Trip (5 days)' },
+    { value: 7, label: '1 Week' },
+    { value: 10, label: '10 Days' },
+    { value: 14, label: '2 Weeks' },
+    { value: 21, label: '3 Weeks' },
+  ];
+
   return (
     <form onSubmit={handleSubmit} className="card">
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* Header */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-primary-50 to-indigo-50 rounded-lg border border-primary-100">
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-1">Smart Travel Search</h3>
+            <p className="text-sm text-gray-600">
+              Select a time period and trip duration. Our AI will search for the best flight and hotel deals within your chosen dates and propose optimal travel plans.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Location inputs */}
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
         {/* Origin */}
         <LocationInput
           label="From"
@@ -86,40 +127,63 @@ export default function SearchForm({ onSearch, onResults, setIsLoading }) {
           }))}
           placeholder="City or airport"
         />
+      </div>
 
-        {/* Departure Date */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Departure
-          </label>
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      {/* Period Selection */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+          <Calendar className="w-4 h-4" />
+          Search Period (when you can travel)
+        </h4>
+        <div className="grid md:grid-cols-3 gap-4">
+          {/* Period Start */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Earliest Date
+            </label>
             <input
               type="date"
-              className="input pl-10"
-              value={formData.departureDate}
-              onChange={(e) => setFormData(prev => ({ ...prev, departureDate: e.target.value }))}
+              className="input"
+              value={formData.periodStart}
+              onChange={(e) => setFormData(prev => ({ ...prev, periodStart: e.target.value }))}
               min={new Date().toISOString().split('T')[0]}
             />
           </div>
-        </div>
 
-        {/* Return Date */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Return (optional)
-          </label>
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          {/* Period End */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Latest Date
+            </label>
             <input
               type="date"
-              className="input pl-10"
-              value={formData.returnDate}
-              onChange={(e) => setFormData(prev => ({ ...prev, returnDate: e.target.value }))}
-              min={formData.departureDate || new Date().toISOString().split('T')[0]}
+              className="input"
+              value={formData.periodEnd}
+              onChange={(e) => setFormData(prev => ({ ...prev, periodEnd: e.target.value }))}
+              min={formData.periodStart || new Date().toISOString().split('T')[0]}
             />
           </div>
+
+          {/* Trip Duration */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              Trip Duration
+            </label>
+            <select
+              className="input"
+              value={formData.tripDuration}
+              onChange={(e) => setFormData(prev => ({ ...prev, tripDuration: parseInt(e.target.value) }))}
+            >
+              {tripDurations.map(d => (
+                <option key={d.value} value={d.value}>{d.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
+        <p className="text-xs text-gray-500 mt-2">
+          AI will find the best dates within this period for a {formData.tripDuration}-day trip
+        </p>
       </div>
 
       {/* Additional Options Row */}
@@ -146,7 +210,7 @@ export default function SearchForm({ onSearch, onResults, setIsLoading }) {
         {/* Budget */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Budget (per person)
+            Budget (total per person)
           </label>
           <div className="relative">
             <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -223,7 +287,7 @@ export default function SearchForm({ onSearch, onResults, setIsLoading }) {
       {/* Submit */}
       <button type="submit" className="btn-primary w-full flex items-center justify-center gap-2">
         <Search className="w-4 h-4" />
-        Find Best Travel Options
+        Find Best Travel Deals
         <ArrowRight className="w-4 h-4" />
       </button>
     </form>

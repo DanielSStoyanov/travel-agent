@@ -1,6 +1,40 @@
 import axios from 'axios';
 import { config } from '../config/index.js';
-import { getCached, setCache } from './cache.service.js';
+import { getCached, setCache, isCacheReady } from './cache.service.js';
+
+// Popular airports for demo/fallback
+const POPULAR_LOCATIONS = [
+  { code: 'JFK', name: 'John F Kennedy Intl', cityName: 'New York', countryCode: 'US', type: 'AIRPORT' },
+  { code: 'LAX', name: 'Los Angeles Intl', cityName: 'Los Angeles', countryCode: 'US', type: 'AIRPORT' },
+  { code: 'LHR', name: 'Heathrow', cityName: 'London', countryCode: 'GB', type: 'AIRPORT' },
+  { code: 'CDG', name: 'Charles de Gaulle', cityName: 'Paris', countryCode: 'FR', type: 'AIRPORT' },
+  { code: 'FRA', name: 'Frankfurt Airport', cityName: 'Frankfurt', countryCode: 'DE', type: 'AIRPORT' },
+  { code: 'AMS', name: 'Schiphol', cityName: 'Amsterdam', countryCode: 'NL', type: 'AIRPORT' },
+  { code: 'BCN', name: 'El Prat', cityName: 'Barcelona', countryCode: 'ES', type: 'AIRPORT' },
+  { code: 'FCO', name: 'Fiumicino', cityName: 'Rome', countryCode: 'IT', type: 'AIRPORT' },
+  { code: 'DXB', name: 'Dubai Intl', cityName: 'Dubai', countryCode: 'AE', type: 'AIRPORT' },
+  { code: 'SIN', name: 'Changi', cityName: 'Singapore', countryCode: 'SG', type: 'AIRPORT' },
+  { code: 'HND', name: 'Haneda', cityName: 'Tokyo', countryCode: 'JP', type: 'AIRPORT' },
+  { code: 'NRT', name: 'Narita', cityName: 'Tokyo', countryCode: 'JP', type: 'AIRPORT' },
+  { code: 'SYD', name: 'Sydney Kingsford Smith', cityName: 'Sydney', countryCode: 'AU', type: 'AIRPORT' },
+  { code: 'IST', name: 'Istanbul Airport', cityName: 'Istanbul', countryCode: 'TR', type: 'AIRPORT' },
+  { code: 'MUC', name: 'Munich Airport', cityName: 'Munich', countryCode: 'DE', type: 'AIRPORT' },
+  { code: 'VIE', name: 'Vienna Intl', cityName: 'Vienna', countryCode: 'AT', type: 'AIRPORT' },
+  { code: 'ZRH', name: 'Zurich Airport', cityName: 'Zurich', countryCode: 'CH', type: 'AIRPORT' },
+  { code: 'MAD', name: 'Barajas', cityName: 'Madrid', countryCode: 'ES', type: 'AIRPORT' },
+  { code: 'LIS', name: 'Lisbon Portela', cityName: 'Lisbon', countryCode: 'PT', type: 'AIRPORT' },
+  { code: 'ATH', name: 'Eleftherios Venizelos', cityName: 'Athens', countryCode: 'GR', type: 'AIRPORT' },
+  { code: 'SOF', name: 'Sofia Airport', cityName: 'Sofia', countryCode: 'BG', type: 'AIRPORT' },
+  { code: 'BKK', name: 'Suvarnabhumi', cityName: 'Bangkok', countryCode: 'TH', type: 'AIRPORT' },
+  { code: 'HKG', name: 'Hong Kong Intl', cityName: 'Hong Kong', countryCode: 'HK', type: 'AIRPORT' },
+  { code: 'ORD', name: 'O\'Hare Intl', cityName: 'Chicago', countryCode: 'US', type: 'AIRPORT' },
+  { code: 'MIA', name: 'Miami Intl', cityName: 'Miami', countryCode: 'US', type: 'AIRPORT' },
+  { code: 'SFO', name: 'San Francisco Intl', cityName: 'San Francisco', countryCode: 'US', type: 'AIRPORT' },
+  { code: 'SEA', name: 'Seattle-Tacoma Intl', cityName: 'Seattle', countryCode: 'US', type: 'AIRPORT' },
+  { code: 'BOS', name: 'Logan Intl', cityName: 'Boston', countryCode: 'US', type: 'AIRPORT' },
+  { code: 'DEN', name: 'Denver Intl', cityName: 'Denver', countryCode: 'US', type: 'AIRPORT' },
+  { code: 'YYZ', name: 'Toronto Pearson', cityName: 'Toronto', countryCode: 'CA', type: 'AIRPORT' },
+];
 
 class AmadeusService {
   constructor() {
@@ -9,7 +43,15 @@ class AmadeusService {
     this.baseUrl = config.amadeus.baseUrl;
   }
 
+  isConfigured() {
+    return !!(config.amadeus.clientId && config.amadeus.clientSecret);
+  }
+
   async getAccessToken() {
+    if (!this.isConfigured()) {
+      throw new Error('Amadeus API credentials not configured. Add AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET to .env');
+    }
+
     // Check if token is still valid (with 60s buffer)
     if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry - 60000) {
       return this.accessToken;
@@ -50,7 +92,8 @@ class AmadeusService {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000
       });
 
       return response.data;
@@ -64,9 +107,16 @@ class AmadeusService {
    * Search for flight offers
    */
   async searchFlights(params) {
+    if (!this.isConfigured()) {
+      console.log('[Amadeus] Not configured, returning empty flights');
+      return [];
+    }
+
     const cacheKey = `flights:${JSON.stringify(params)}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
+    if (isCacheReady()) {
+      const cached = getCached(cacheKey);
+      if (cached) return cached;
+    }
 
     const searchParams = {
       originLocationCode: params.originLocationCode,
@@ -92,17 +142,87 @@ class AmadeusService {
     // Process and normalize flight data
     const flights = this.normalizeFlightData(response);
 
-    setCache(cacheKey, flights, config.cache.ttlFlights);
+    if (isCacheReady()) {
+      setCache(cacheKey, flights, config.cache.ttlFlights);
+    }
     return flights;
+  }
+
+  /**
+   * Search flights across a date range to find best deals
+   */
+  async searchFlightsInRange(params) {
+    if (!this.isConfigured()) {
+      console.log('[Amadeus] Not configured, returning empty flights');
+      return { flights: [], bestDeal: null, priceByDate: {} };
+    }
+
+    const { originLocationCode, destinationLocationCode, startDate, endDate, tripDuration, adults } = params;
+
+    // Generate sample dates within the range (every 3-4 days to limit API calls)
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const dates = [];
+    const current = new Date(start);
+
+    while (current <= end) {
+      dates.push(current.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 3); // Sample every 3 days
+    }
+
+    // Limit to max 10 date samples to avoid too many API calls
+    const sampleDates = dates.slice(0, 10);
+
+    const allFlights = [];
+    const priceByDate = {};
+
+    // Search flights for each sample date
+    for (const departureDate of sampleDates) {
+      try {
+        const returnDate = tripDuration
+          ? new Date(new Date(departureDate).getTime() + tripDuration * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          : null;
+
+        const flights = await this.searchFlights({
+          originLocationCode,
+          destinationLocationCode,
+          departureDate,
+          returnDate,
+          adults: adults || 1,
+          max: 10
+        });
+
+        if (flights.length > 0) {
+          const minPrice = Math.min(...flights.map(f => f.price.total));
+          priceByDate[departureDate] = minPrice;
+          allFlights.push(...flights.map(f => ({ ...f, searchDate: departureDate })));
+        }
+      } catch (error) {
+        console.error(`Failed to search flights for ${departureDate}:`, error.message);
+      }
+    }
+
+    // Find best deal
+    const bestDeal = allFlights.length > 0
+      ? allFlights.reduce((best, flight) => flight.price.total < best.price.total ? flight : best)
+      : null;
+
+    return { flights: allFlights, bestDeal, priceByDate };
   }
 
   /**
    * Search for hotels by city
    */
   async searchHotelsByCity(params) {
+    if (!this.isConfigured()) {
+      return [];
+    }
+
     const cacheKey = `hotels_city:${params.cityCode}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
+    if (isCacheReady()) {
+      const cached = getCached(cacheKey);
+      if (cached) return cached;
+    }
 
     const response = await this.request('GET', '/v1/reference-data/locations/hotels/by-city', {
       cityCode: params.cityCode,
@@ -111,7 +231,9 @@ class AmadeusService {
       hotelSource: 'ALL'
     });
 
-    setCache(cacheKey, response.data, config.cache.ttlHotels);
+    if (isCacheReady()) {
+      setCache(cacheKey, response.data, config.cache.ttlHotels);
+    }
     return response.data;
   }
 
@@ -119,9 +241,15 @@ class AmadeusService {
    * Search for hotel offers (availability and pricing)
    */
   async searchHotelOffers(params) {
+    if (!this.isConfigured()) {
+      return [];
+    }
+
     const cacheKey = `hotel_offers:${JSON.stringify(params)}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
+    if (isCacheReady()) {
+      const cached = getCached(cacheKey);
+      if (cached) return cached;
+    }
 
     // Amadeus limits to 20 hotel IDs per request
     const hotelIds = params.hotelIds.slice(0, 20).join(',');
@@ -137,34 +265,66 @@ class AmadeusService {
     });
 
     const hotels = this.normalizeHotelData(response);
-    setCache(cacheKey, hotels, config.cache.ttlHotels);
+    if (isCacheReady()) {
+      setCache(cacheKey, hotels, config.cache.ttlHotels);
+    }
     return hotels;
   }
 
   /**
-   * Get city/airport IATA codes
+   * Get city/airport IATA codes - with fallback to local data
    */
   async searchLocations(keyword) {
-    const cacheKey = `locations:${keyword.toLowerCase()}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
+    const lowerKeyword = keyword.toLowerCase();
 
-    const response = await this.request('GET', '/v1/reference-data/locations', {
-      keyword,
-      subType: 'CITY,AIRPORT',
-      view: 'LIGHT'
-    });
+    // Try cache first
+    const cacheKey = `locations:${lowerKeyword}`;
+    if (isCacheReady()) {
+      const cached = getCached(cacheKey);
+      if (cached) return cached;
+    }
 
-    const locations = response.data.map(loc => ({
-      code: loc.iataCode,
-      name: loc.name,
-      cityName: loc.address?.cityName || loc.name,
-      countryCode: loc.address?.countryCode,
-      type: loc.subType
-    }));
+    // If API not configured, use local fallback
+    if (!this.isConfigured()) {
+      console.log('[Amadeus] Using local location fallback');
+      const filtered = POPULAR_LOCATIONS.filter(loc =>
+        loc.cityName.toLowerCase().includes(lowerKeyword) ||
+        loc.code.toLowerCase().includes(lowerKeyword) ||
+        loc.name.toLowerCase().includes(lowerKeyword) ||
+        loc.countryCode.toLowerCase().includes(lowerKeyword)
+      );
+      return filtered;
+    }
 
-    setCache(cacheKey, locations, config.cache.ttlSearch);
-    return locations;
+    try {
+      const response = await this.request('GET', '/v1/reference-data/locations', {
+        keyword,
+        subType: 'CITY,AIRPORT',
+        view: 'LIGHT'
+      });
+
+      const locations = (response.data || []).map(loc => ({
+        code: loc.iataCode,
+        name: loc.name,
+        cityName: loc.address?.cityName || loc.name,
+        countryCode: loc.address?.countryCode,
+        type: loc.subType
+      }));
+
+      if (isCacheReady()) {
+        setCache(cacheKey, locations, config.cache.ttlSearch);
+      }
+      return locations;
+    } catch (error) {
+      console.error('[Amadeus] Location search failed, using fallback:', error.message);
+      // Fallback to local data on API error
+      const filtered = POPULAR_LOCATIONS.filter(loc =>
+        loc.cityName.toLowerCase().includes(lowerKeyword) ||
+        loc.code.toLowerCase().includes(lowerKeyword) ||
+        loc.name.toLowerCase().includes(lowerKeyword)
+      );
+      return filtered;
+    }
   }
 
   // Normalize flight data for easier consumption
@@ -264,7 +424,7 @@ class AmadeusService {
   calculateNights(checkIn, checkOut) {
     const start = new Date(checkIn);
     const end = new Date(checkOut);
-    return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    return Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 1;
   }
 }
 
