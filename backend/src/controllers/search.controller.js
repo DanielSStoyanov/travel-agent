@@ -1,4 +1,3 @@
-import { amadeusService } from '../services/amadeus.service.js';
 import { searchApiService } from '../services/search.service.js';
 
 export async function searchLocations(req, res, next) {
@@ -11,7 +10,7 @@ export async function searchLocations(req, res, next) {
       });
     }
 
-    const locations = await amadeusService.searchLocations(keyword);
+    const locations = await searchApiService.searchLocations(keyword);
     res.json({ locations });
   } catch (error) {
     next(error);

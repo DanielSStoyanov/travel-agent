@@ -9,17 +9,6 @@ export const config = {
   port: process.env.PORT || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
 
-  amadeus: {
-    clientId: process.env.AMADEUS_CLIENT_ID,
-    clientSecret: process.env.AMADEUS_CLIENT_SECRET,
-    env: process.env.AMADEUS_ENV || 'test',
-    get baseUrl() {
-      return this.env === 'production'
-        ? 'https://api.amadeus.com'
-        : 'https://test.api.amadeus.com';
-    }
-  },
-
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
