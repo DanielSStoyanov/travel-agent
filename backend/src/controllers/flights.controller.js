@@ -1,4 +1,4 @@
-import { amadeusService } from '../services/amadeus.service.js';
+import { searchApiService } from '../services/search.service.js';
 
 export async function searchFlights(req, res, next) {
   try {
@@ -11,7 +11,7 @@ export async function searchFlights(req, res, next) {
       travelClass,
       nonStop,
       maxPrice,
-      currencyCode = 'EUR'
+      currencyCode = 'USD'
     } = req.query;
 
     // Validation
@@ -21,14 +21,13 @@ export async function searchFlights(req, res, next) {
       });
     }
 
-    const flights = await amadeusService.searchFlights({
-      originLocationCode: origin.toUpperCase(),
-      destinationLocationCode: destination.toUpperCase(),
+    const flights = await searchApiService.searchFlights({
+      origin: origin.toUpperCase(),
+      destination: destination.toUpperCase(),
       departureDate,
       returnDate,
       adults: parseInt(adults),
       travelClass,
-      nonStop: nonStop === 'true',
       currencyCode
     });
 
@@ -36,6 +35,11 @@ export async function searchFlights(req, res, next) {
     let filteredFlights = flights;
     if (maxPrice) {
       filteredFlights = flights.filter(f => f.price.total <= parseFloat(maxPrice));
+    }
+
+    // Filter non-stop flights if requested
+    if (nonStop === 'true') {
+      filteredFlights = filteredFlights.filter(f => f.outbound?.stops === 0);
     }
 
     // Sort by price by default
@@ -49,7 +53,8 @@ export async function searchFlights(req, res, next) {
         destination,
         departureDate,
         returnDate,
-        searchedAt: new Date().toISOString()
+        searchedAt: new Date().toISOString(),
+        remainingSearches: searchApiService.getRemainingSearches()
       }
     });
   } catch (error) {
@@ -64,6 +69,7 @@ export async function getFlightCalendar(req, res, next) {
       destination,
       startDate,
       endDate,
+      tripDuration,
       adults = 1
     } = req.query;
 
@@ -73,46 +79,25 @@ export async function getFlightCalendar(req, res, next) {
       });
     }
 
-    // Generate date range
-    const dates = [];
-    const current = new Date(startDate);
-    const end = new Date(endDate);
+    // Use the range search method which is more API-efficient
+    const rangeResults = await searchApiService.searchFlightsInRange({
+      origin: origin.toUpperCase(),
+      destination: destination.toUpperCase(),
+      startDate,
+      endDate,
+      tripDuration: tripDuration ? parseInt(tripDuration) : null,
+      adults: parseInt(adults)
+    });
 
-    while (current <= end) {
-      dates.push(current.toISOString().split('T')[0]);
-      current.setDate(current.getDate() + 1);
-    }
+    // Convert priceByDate to priceMatrix format
+    const priceMatrix = Object.entries(rangeResults.priceByDate).map(([date, price]) => ({
+      date,
+      cheapestPrice: price,
+      hasAvailability: true
+    }));
 
-    // Fetch prices for each date (with rate limiting)
-    const priceMatrix = [];
-    for (const date of dates.slice(0, 14)) { // Limit to 14 days to avoid API rate limits
-      try {
-        const flights = await amadeusService.searchFlights({
-          originLocationCode: origin.toUpperCase(),
-          destinationLocationCode: destination.toUpperCase(),
-          departureDate: date,
-          adults: parseInt(adults),
-          max: 5
-        });
-
-        const cheapest = flights.length > 0
-          ? Math.min(...flights.map(f => f.price.total))
-          : null;
-
-        priceMatrix.push({
-          date,
-          cheapestPrice: cheapest,
-          hasAvailability: flights.length > 0
-        });
-      } catch (err) {
-        priceMatrix.push({
-          date,
-          cheapestPrice: null,
-          hasAvailability: false,
-          error: true
-        });
-      }
-    }
+    // Sort by date
+    priceMatrix.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     res.json({
       origin,
@@ -120,7 +105,12 @@ export async function getFlightCalendar(req, res, next) {
       priceMatrix,
       cheapestDate: priceMatrix
         .filter(p => p.cheapestPrice)
-        .sort((a, b) => a.cheapestPrice - b.cheapestPrice)[0]?.date
+        .sort((a, b) => a.cheapestPrice - b.cheapestPrice)[0]?.date,
+      bestDeal: rangeResults.bestDeal,
+      meta: {
+        searchedAt: new Date().toISOString(),
+        remainingSearches: searchApiService.getRemainingSearches()
+      }
     });
   } catch (error) {
     next(error);

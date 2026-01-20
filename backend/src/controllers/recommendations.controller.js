@@ -1,4 +1,3 @@
-import { amadeusService } from '../services/amadeus.service.js';
 import { searchApiService } from '../services/search.service.js';
 import { openaiService } from '../services/openai.service.js';
 
@@ -47,9 +46,9 @@ export async function getRecommendations(req, res, next) {
       // NEW FLOW: Search across date range to find best deals
       console.log(`[Recommendations] Searching flights in range: ${periodStart} to ${periodEnd}`);
 
-      const rangeResults = await amadeusService.searchFlightsInRange({
-        originLocationCode: origin.toUpperCase(),
-        destinationLocationCode: destination.toUpperCase(),
+      const rangeResults = await searchApiService.searchFlightsInRange({
+        origin: origin.toUpperCase(),
+        destination: destination.toUpperCase(),
         startDate: periodStart,
         endDate: periodEnd,
         tripDuration: parseInt(tripDuration),
@@ -72,9 +71,9 @@ export async function getRecommendations(req, res, next) {
     } else {
       // LEGACY FLOW: Specific dates
       console.log('[Recommendations] Fetching flights for specific dates...');
-      flights = await amadeusService.searchFlights({
-        originLocationCode: origin.toUpperCase(),
-        destinationLocationCode: destination.toUpperCase(),
+      flights = await searchApiService.searchFlights({
+        origin: origin.toUpperCase(),
+        destination: destination.toUpperCase(),
         departureDate,
         returnDate,
         adults: parseInt(adults)
@@ -87,23 +86,20 @@ export async function getRecommendations(req, res, next) {
     let hotels = [];
 
     try {
-      const hotelList = await amadeusService.searchHotelsByCity({
-        cityCode: destination.toUpperCase()
+      const checkIn = searchDates.departureDate || searchDates.recommended || periodStart;
+      const checkOut = searchDates.returnDate ||
+        new Date(new Date(checkIn).getTime() + tripDuration * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      // Get city name from destination code
+      const cityName = searchApiService.getCityNameFromCode(destination.toUpperCase()) || destination;
+
+      hotels = await searchApiService.searchHotels({
+        destination: cityName,
+        cityCode: destination.toUpperCase(),
+        checkIn,
+        checkOut,
+        adults: parseInt(adults)
       });
-
-      if (hotelList && hotelList.length > 0) {
-        const hotelIds = hotelList.slice(0, 20).map(h => h.hotelId);
-        const checkIn = searchDates.departureDate || searchDates.recommended || periodStart;
-        const checkOut = searchDates.returnDate ||
-          new Date(new Date(checkIn).getTime() + tripDuration * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-        hotels = await amadeusService.searchHotelOffers({
-          hotelIds,
-          checkInDate: checkIn,
-          checkOutDate: checkOut,
-          adults: parseInt(adults)
-        });
-      }
     } catch (err) {
       console.error('Hotel search error:', err.message);
     }
@@ -129,7 +125,7 @@ export async function getRecommendations(req, res, next) {
           webSearchResults = [];
           for (const query of smartQueries.slice(0, 2)) {
             try {
-              const result = await searchApiService.search(query);
+              const result = await searchApiService.webSearch(query);
               webSearchResults.push({ query, results: result });
             } catch (err) {
               console.error('Web search error:', err.message);
