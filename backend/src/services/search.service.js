@@ -258,6 +258,11 @@ class SearchApiService {
     // Generate a unique ID
     const id = `${firstFlight.flight_number || 'FL'}-${firstFlight.departure_airport?.id || ''}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+    // Extract booking options if available
+    const bookingOptions = option.extensions?.map(ext => ({
+      source: ext,
+    })) || [];
+
     return {
       id,
       price: {
@@ -304,6 +309,9 @@ class SearchApiService {
       bookingClass: option.travel_class || 'ECONOMY',
       type: type,
       carbonEmissions: option.carbon_emissions,
+      bookingToken: option.booking_token || null,
+      departureToken: option.departure_token || null,
+      bookingOptions,
       layovers: option.layovers?.map(l => ({
         airport: l.id,
         airportName: l.name,
@@ -397,6 +405,8 @@ class SearchApiService {
           },
           images: property.images?.map(img => img.thumbnail || img.original_image) || [],
           amenities: property.amenities || [],
+          link: property.link || null,
+          serpLink: property.serpapi_property_details_link || null,
           type: property.type || 'Hotel',
           checkIn: property.check_in_time,
           checkOut: property.check_out_time,

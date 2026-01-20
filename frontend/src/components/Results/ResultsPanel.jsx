@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Award, ChevronRight, Plane, Hotel, Calendar, TrendingDown, Sparkles } from 'lucide-react';
+import { Award, ChevronRight, Plane, Hotel, Calendar, TrendingDown, Sparkles, ExternalLink, MapPin, Star, Clock } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 
 // Safe date formatter that handles various formats from different APIs
@@ -202,55 +202,145 @@ export default function ResultsPanel({ recommendations }) {
                 <div className="grid sm:grid-cols-2 gap-4">
                   {/* Flight Details */}
                   {rec.flight && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
-                        <Plane className="w-4 h-4" /> Flight Details
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                      <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                        <Plane className="w-4 h-4 text-blue-600" /> Flight Details
                       </h4>
-                      <div className="text-sm space-y-1">
-                        {rec.flight.outbound?.departure?.time && (
-                          <p>
-                            <span className="text-gray-500">Outbound:</span>{' '}
-                            {safeFormatDate(rec.flight.outbound.departure.time, 'MMM d, HH:mm')}
-                          </p>
+
+                      {/* Flight Segments */}
+                      <div className="space-y-3">
+                        {rec.flight.outbound?.segments?.map((segment, segIdx) => (
+                          <div key={segIdx} className="flex items-start gap-3 text-sm">
+                            {segment.carrierLogo && (
+                              <img src={segment.carrierLogo} alt={segment.carrier} className="w-8 h-8 rounded" />
+                            )}
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900">
+                                {segment.carrier} {segment.flightNumber}
+                              </div>
+                              <div className="text-gray-600">
+                                {segment.departure?.airport} ({segment.departure?.time}) → {segment.arrival?.airport} ({segment.arrival?.time})
+                              </div>
+                              {segment.durationFormatted && (
+                                <div className="text-gray-500 text-xs flex items-center gap-1">
+                                  <Clock className="w-3 h-3" /> {segment.durationFormatted}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )) || (
+                          <div className="text-sm">
+                            <p className="text-gray-600">
+                              {rec.flight.outbound?.departure?.airport} → {rec.flight.outbound?.arrival?.airport}
+                            </p>
+                            {rec.flight.outbound?.departure?.time && (
+                              <p className="text-gray-500">Departure: {safeFormatDate(rec.flight.outbound.departure.time, 'MMM d, HH:mm')}</p>
+                            )}
+                          </div>
                         )}
-                        <p>
-                          <span className="text-gray-500">Route:</span>{' '}
-                          {rec.flight.outbound?.departure?.airport} → {rec.flight.outbound?.arrival?.airport}
-                        </p>
-                        {(rec.flight.outbound?.durationFormatted || rec.flight.outbound?.duration) && (
-                          <p>
-                            <span className="text-gray-500">Duration:</span>{' '}
-                            {rec.flight.outbound.durationFormatted || rec.flight.outbound.duration}
-                          </p>
+                      </div>
+
+                      {/* Flight Summary */}
+                      <div className="mt-3 pt-3 border-t border-blue-200 flex justify-between items-center">
+                        <div>
+                          <span className="text-gray-500 text-sm">Total:</span>
+                          <span className="ml-2 font-bold text-lg text-blue-700">
+                            {rec.flight.price?.currency} {rec.flight.price?.total?.toFixed(0)}
+                          </span>
+                        </div>
+                        {rec.flight.outbound?.durationFormatted && (
+                          <span className="text-sm text-gray-500">
+                            {rec.flight.outbound.durationFormatted} • {rec.flight.outbound?.stops === 0 ? 'Direct' : `${rec.flight.outbound.stops} stop(s)`}
+                          </span>
                         )}
-                        <p>
-                          <span className="text-gray-500">Price:</span>{' '}
-                          {rec.flight.price?.currency} {rec.flight.price?.total?.toFixed(2)}
-                        </p>
                       </div>
                     </div>
                   )}
 
                   {/* Hotel Details */}
-                  {rec.hotel && rec.hotel.offers?.[0] && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
-                        <Hotel className="w-4 h-4" /> Hotel Details
+                  {rec.hotel && (
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                      <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                        <Hotel className="w-4 h-4 text-green-600" /> Hotel Details
                       </h4>
-                      <div className="text-sm space-y-1">
-                        <p className="font-medium">{rec.hotel.name}</p>
-                        <p>
-                          <span className="text-gray-500">Room:</span>{' '}
-                          {rec.hotel.offers[0].roomType || 'Standard'}
-                        </p>
-                        <p>
-                          <span className="text-gray-500">Price:</span>{' '}
-                          {rec.hotel.offers[0].price?.currency} {rec.hotel.offers[0].price?.total?.toFixed(2)} total
-                        </p>
-                        {rec.hotel.offers[0].price?.perNight && (
-                          <p className="text-gray-500 text-xs">
-                            ({rec.hotel.offers[0].price.perNight.toFixed(2)}/night)
-                          </p>
+
+                      {/* Hotel Image */}
+                      {rec.hotel.images?.[0] && (
+                        <img
+                          src={rec.hotel.images[0]}
+                          alt={rec.hotel.name}
+                          className="w-full h-32 object-cover rounded-lg mb-3"
+                        />
+                      )}
+
+                      <div className="space-y-2 text-sm">
+                        <p className="font-semibold text-gray-900">{rec.hotel.name}</p>
+
+                        {/* Rating */}
+                        {(rec.hotel.rating || rec.hotel.starRating) && (
+                          <div className="flex items-center gap-2">
+                            {rec.hotel.starRating && (
+                              <span className="text-yellow-500">
+                                {'★'.repeat(rec.hotel.starRating)}
+                              </span>
+                            )}
+                            {rec.hotel.rating && (
+                              <span className="bg-green-600 text-white text-xs px-1.5 py-0.5 rounded">
+                                {rec.hotel.rating}
+                              </span>
+                            )}
+                            {rec.hotel.reviewCount > 0 && (
+                              <span className="text-gray-500 text-xs">({rec.hotel.reviewCount} reviews)</span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Location */}
+                        {rec.hotel.location?.address && (
+                          <div className="flex items-start gap-1 text-gray-600">
+                            <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                            <span>{rec.hotel.location.address}</span>
+                          </div>
+                        )}
+
+                        {/* Amenities */}
+                        {rec.hotel.amenities?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {rec.hotel.amenities.slice(0, 4).map((amenity, i) => (
+                              <span key={i} className="text-xs bg-white px-2 py-0.5 rounded border border-green-200">
+                                {amenity}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Hotel Price & Link */}
+                      <div className="mt-3 pt-3 border-t border-green-200">
+                        {rec.hotel.offers?.[0] && (
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <span className="text-gray-500 text-sm">Total:</span>
+                              <span className="ml-2 font-bold text-lg text-green-700">
+                                {rec.hotel.offers[0].price?.currency} {rec.hotel.offers[0].price?.total?.toFixed(0)}
+                              </span>
+                              {rec.hotel.offers[0].price?.perNight && (
+                                <span className="text-xs text-gray-500 ml-1">
+                                  (${rec.hotel.offers[0].price.perNight.toFixed(0)}/night)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {rec.hotel.link && (
+                          <a
+                            href={rec.hotel.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-sm text-green-700 hover:text-green-800 font-medium"
+                          >
+                            View on Google Hotels <ExternalLink className="w-3 h-3" />
+                          </a>
                         )}
                       </div>
                     </div>
